@@ -495,3 +495,93 @@ func TestVerifyPVCResizeFailure(t *testing.T) {
 		})
 	}
 }
+
+func TestSetTemplateValues(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		Name        string
+		Template    string
+		Database    *everestv1alpha1.DatabaseCluster
+		Expected    string
+		ExpectError bool
+	}{
+		{
+			Name:        "Improper template",
+			Template:    "{{ .ObjectMeta.Name }-example.org",
+			Database:    &everestv1alpha1.DatabaseCluster{},
+			Expected:    "",
+			ExpectError: true,
+		},
+		{
+			Name:     "Valid template with database name",
+			Template: "{{ .ObjectMeta.Name }}-example.org",
+			Database: &everestv1alpha1.DatabaseCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-name",
+				},
+			},
+			Expected:    "test-name-example.org",
+			ExpectError: false,
+		},
+		{
+			Name:     "Valid template with database name and namespace",
+			Template: "{{ .ObjectMeta.Name }}-{{ .ObjectMeta.Namespace }}-example.org",
+			Database: &everestv1alpha1.DatabaseCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-name",
+					Namespace: "test-ns",
+				},
+			},
+			Expected:    "test-name-test-ns-example.org",
+			ExpectError: false,
+		},
+		{
+			Name:     "Valid template with database name, namespace and engine version",
+			Template: "{{ .ObjectMeta.Name }}-{{ .ObjectMeta.Namespace }}-{{ .Spec.Engine.Version }}-example.org",
+			Database: &everestv1alpha1.DatabaseCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-name",
+					Namespace: "test-ns",
+				},
+				Spec: everestv1alpha1.DatabaseClusterSpec{
+					Engine: everestv1alpha1.Engine{
+						Version: "v0.0.1",
+					},
+				},
+			},
+			Expected:    "test-name-test-ns-v0.0.1-example.org",
+			ExpectError: false,
+		},
+		{
+			Name:     "Valid template with database name and engine version",
+			Template: "{{ .ObjectMeta.Name }}-{{ .Spec.Engine.Version }}-example.org",
+			Database: &everestv1alpha1.DatabaseCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-name",
+				},
+				Spec: everestv1alpha1.DatabaseClusterSpec{
+					Engine: everestv1alpha1.Engine{
+						Version: "v0.0.2",
+					},
+				},
+			},
+			Expected:    "test-name-v0.0.2-example.org",
+			ExpectError: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+
+			result, err := SetTemplateValues(tc.Template, tc.Database)
+			if tc.ExpectError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.Expected, result)
+			}
+		})
+	}
+}
